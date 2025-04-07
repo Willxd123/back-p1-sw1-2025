@@ -1,0 +1,24 @@
+[
+  {
+    "id": "d2ff7c8d-ee5f-4582-b499-195f38d186e7",
+    "x": 624.16474605207,
+    "y": 74.37543393881418,
+    "width": 100,
+    "height": 100,
+    "fill": "#13BC22",
+    "stroke": "black",
+    "strokeWidth": 2,
+    "name": "shape"
+  },
+  {
+    "id": "eed3eebe-16b4-4fbd-90a3-e83d6c66603c",
+    "x": 51,
+    "y": 20.71830985915494,
+    "width": 100,
+    "height": 100,
+    "fill": "#97F17B",
+    "stroke": "black",
+    "strokeWidth": 2,
+    "name": "shape"
+  }
+]
