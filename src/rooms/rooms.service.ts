@@ -11,6 +11,8 @@ import * as fs from 'fs';
 import { writeFile, mkdir, access, constants } from 'fs/promises';
 import * as path from 'path';
 import { CanvasFileHelper } from './helpers/canva-file.helper';
+import { CanvasStorageService } from './canvas-storage.service';
+import { CanvasSyncHelper } from './helpers/canvas-sync.helper';
 @Injectable()
 export class RoomsService {
   constructor(
@@ -20,102 +22,19 @@ export class RoomsService {
     private readonly userRepository: Repository<User>,
     @InjectRepository(RoomUser)
     private readonly roomUserRepository: Repository<RoomUser>,
-    
+    private readonly canvasStorage: CanvasStorageService,
+    private readonly canvasSync: CanvasSyncHelper
   ) { }
   //-----------------------------------------
-  
+  async getCanvasState(roomCode: string): Promise<any[]> {
+    return this.canvasSync.getRoomState(roomCode);
+  }
+
+  async updateCanvasState(roomCode: string, updater: (components: any[]) => void) {
+    await this.canvasSync.updateRoomState(roomCode, updater);
+  }
   //leer y escrbir archivos;
-  private canvasObjectsByRoom: { [roomCode: string]: any[] } = {};
-
-  private getCanvasFilePath(roomCode: string): string {
-    return path.resolve(__dirname, '../../canvas-files', `canvas_${roomCode}.json`);
-  }
-
-  private saveCanvasToFile(roomCode: string): void {
-    const filePath = this.getCanvasFilePath(roomCode);
-    const data = this.canvasObjectsByRoom[roomCode] || [];
-    fs.writeFileSync(filePath, JSON.stringify(data, null, 2));
-  }
-
-  private loadCanvasFromFile(roomCode: string): void {
-    const filePath = this.getCanvasFilePath(roomCode);
-    if (fs.existsSync(filePath)) {
-      const content = fs.readFileSync(filePath, 'utf-8');
-      this.canvasObjectsByRoom[roomCode] = JSON.parse(content);
-    }
-  }
-  //moverobjeto
-  private roomsMap = new Map<string, any[]>(); // clave: roomCode, valor: objetos canvas
-  async updateObjectPosition(roomCode: string, objectId: string, x: number, y: number) {
-    const roomObjects = this.canvasObjectsByRoom[roomCode];
-    if (!roomObjects) return;
   
-    const obj = roomObjects.find((o) => o.id === objectId);
-    if (obj) {
-      obj.x = x;
-      obj.y = y;
-  
-      // Persistir al archivo JSON
-      const filePath = path.join(process.cwd(), 'canvas-files', `${roomCode}.json`);
-      await writeFile(filePath, JSON.stringify(roomObjects, null, 2));
-    }
-  }
-  
-  
-
-
-
-  // Agregar un objeto a la sala
-  async addObjectToRoom(roomCode: string, objectData: any) {
-    if (!this.canvasObjectsByRoom[roomCode]) {
-      this.canvasObjectsByRoom[roomCode] = [];
-    }
-  
-    this.canvasObjectsByRoom[roomCode].push(objectData);
-  
-    // Guardar en archivo
-    const fileName = `${roomCode}.json`;
-    const dirPath = path.join(process.cwd(), 'canvas-files');
-    const filePath = path.join(dirPath, fileName);
-    async function ensureDirExists(dir: string) {
-      try {
-        await access(dir, constants.F_OK);
-      } catch {
-        await mkdir(dir, { recursive: true });
-      }
-    }
-    await ensureDirExists(dirPath);
-    await writeFile(filePath, JSON.stringify(this.canvasObjectsByRoom[roomCode], null, 2));
-  
-    // Guardar referencia en DB si no existe
-    const room = await this.roomRepository.findOne({ where: { code: roomCode } });
-    if (room && !room.canvasFile) {
-      room.canvasFile = `canvas-files/${fileName}`;
-      await this.roomRepository.save(room);
-    }
-  }
-  
-
-
-  // Obtener todos los objetos de una sala
-  async getObjectsInRoom(roomCode: string): Promise<any[]> {
-    const room = await this.roomRepository.findOne({ where: { code: roomCode } });
-    if (!room || !room.canvasFile) return [];
-  
-    const filePath = path.join(process.cwd(), room.canvasFile);
-    try {
-      const content = await fs.promises.readFile(filePath, 'utf-8');
-      const fileData = JSON.parse(content); // ✅ Esto da un arreglo real
-       // Import dinámico para JSON
-      this.canvasObjectsByRoom[roomCode] = fileData;
-      return fileData;
-    } catch (err) {
-      console.error(`❌ No se pudo leer el archivo JSON para la sala ${roomCode}:`, err);
-      return [];
-    }
-  }
-  
-
 
   // Renombrar el método a 'create' para que coincida con el controller
   async create(createRoomDto: CreateRoomDto, user: UserActiveInterface) {
@@ -261,4 +180,5 @@ export class RoomsService {
     // Devolvemos solo las salas relacionadas con el usuario
     return allRooms;
   }
+
 }

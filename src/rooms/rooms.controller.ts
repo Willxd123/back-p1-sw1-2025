@@ -8,6 +8,9 @@ import {
   Delete,
   UseGuards,
   Req,
+  UseInterceptors,
+  UploadedFile,
+  Res,
 } from '@nestjs/common';
 import { RoomsService } from './rooms.service';
 import { CreateRoomDto } from './dto/create-room.dto';
@@ -20,7 +23,9 @@ import { Auth } from 'src/auth/decorators/auth.decorator';
 import { ActiveUser } from 'src/common/decorators/active-user.decorator';
 import { UserActiveInterface } from 'src/common/interfaces/user-active.interface';
 import { RoomUserService } from 'src/room-user/room-user.service';
-
+import { FileInterceptor } from '@nestjs/platform-express';
+import { Response } from 'express'; // ✅ Import correcto
+import { Express } from 'express';  // ✅ Import de tipo para Multer
 @Roles(Role.USER)
 @UseGuards(AuthGuard, RolesGuard)
 @Controller('rooms')
@@ -29,6 +34,10 @@ export class RoomsController {
     private readonly roomsService: RoomsService,
     private readonly roomUserService: RoomUserService,
   ) {}
+
+
+
+
 
   @Post()
   @Auth(Role.USER) // Aseguramos que solo usuarios autenticados puedan crear salas
