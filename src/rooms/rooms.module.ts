@@ -8,6 +8,8 @@ import { AuthModule } from '../auth/auth.module';  // Verifica que esta ruta sea
 import { RoomUser } from 'src/room-user/entities/room-user.entity';
 import { RoomsGateway } from './rooms.gateway';
 import { RoomUserModule } from 'src/room-user/room-user.module';
+import { CanvasSyncHelper } from './helpers/canvas-sync.helper';
+import { CanvasStorageService } from './canvas-storage.service';
 
 
 @Module({
@@ -17,8 +19,9 @@ import { RoomUserModule } from 'src/room-user/room-user.module';
     forwardRef(() => AuthModule),   // Si hay una dependencia circular con AuthModule
     RoomUserModule, // Importa RoomUserModule
   ],
-  providers: [RoomsService, RoomsGateway],
+  providers: [RoomsService, RoomsGateway, CanvasStorageService, // Añade estos nuevos providers
+    CanvasSyncHelper],
   controllers: [RoomsController],
   exports: [RoomsService, RoomsGateway], // Exportar RoomsGateway para que otros módulos lo usen
 })
-export class RoomsModule {}
+export class RoomsModule { }

@@ -1,35 +1,40 @@
-[
-  {
-    "id": "39186e93-e9e4-4ad3-a1f2-d3ad7c351eea",
-    "x": 132.72215108834826,
-    "y": 127.9141297310312,
-    "width": 100,
-    "height": 100,
-    "fill": "#7DC8B5",
-    "stroke": "black",
-    "strokeWidth": 2,
-    "name": "shape"
-  },
-  {
-    "id": "41c9d20f-6fb8-4855-a60c-5a9ece0b94a1",
-    "x": 274.1701087353137,
-    "y": 136.0085051371027,
-    "width": 100,
-    "height": 100,
-    "fill": "#4C9A1F",
-    "stroke": "black",
-    "strokeWidth": 2,
-    "name": "shape"
-  },
-  {
-    "id": "47fe5ac8-97e7-4d2c-972c-19c0336ad9b7",
-    "x": 262.9718309859155,
-    "y": 262.8153364632238,
-    "width": 100,
-    "height": 100,
-    "fill": "#8E6A4A",
-    "stroke": "black",
-    "strokeWidth": 2,
-    "name": "shape"
-  }
-]
+{
+  "roomCode": "480G",
+  "lastUpdated": "2025-04-18T01:38:30.703Z",
+  "components": [
+    {
+      "id": "99655e3a-797e-45ef-9c6c-653521bce782",
+      "label": "Caja DIV",
+      "style": {
+        "top": "120px",
+        "left": "61px",
+        "width": "700px",
+        "height": "500px",
+        "backgroundColor": "#0080ff",
+        "color": "#160b35",
+        "border": "13px solid #ff00ff",
+        "borderRadius": "50px",
+        "position": "absolute"
+      },
+      "children": [],
+      "parentId": null
+    },
+    {
+      "id": "a488546c-17ff-4461-9333-fee8058caff6",
+      "label": "Caja DIV",
+      "style": {
+        "top": "134px",
+        "left": "9px",
+        "width": "200px",
+        "height": "100px",
+        "backgroundColor": "#f0f0f0",
+        "color": "#004040",
+        "border": "2px",
+        "borderRadius": "2px",
+        "position": "absolute"
+      },
+      "children": [],
+      "parentId": null
+    }
+  ]
+}
