@@ -347,25 +347,31 @@ export class RoomsGateway implements OnGatewayConnection, OnGatewayDisconnect {
   ) {
     try {
       const { roomCode, componentId, updates } = data;
-      const user = client.data.user;
-
+      
       await this.canvasSync.updateRoomState(roomCode, (components) => {
         const component = this.findComponentInArray(components, componentId);
         if (component) {
           if (!component.style) component.style = {};
-          if (updates.style) {
-            Object.assign(component.style, updates.style);
-          } else {
-            Object.assign(component.style, updates);
-          }
-
-          client.to(roomCode).emit('componentPropertiesUpdated', { componentId, updates });
+          
+          // Aplica las actualizaciones
+          Object.keys(updates).forEach(key => {
+            if (key === 'content') {
+              component.content = updates[key];
+            } else {
+              component.style[key] = updates[key];
+            }
+          });
+  
+          // Emitir a TODOS los clientes (incluyendo el que originó el cambio)
+          this.server.to(roomCode).emit('componentPropertiesUpdated', {
+            componentId,
+            updates
+          });
         }
       });
-
-      console.log(`User ${user.email} updated component ${componentId} properties in room: ${roomCode}`);
     } catch (error) {
       client.emit('error', { message: error.message });
     }
   }
+
 }
