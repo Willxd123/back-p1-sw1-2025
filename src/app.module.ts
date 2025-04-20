@@ -7,6 +7,7 @@ import { ConfigModule } from '@nestjs/config';
 import { AuthModule } from './auth/auth.module';
 import { RoomsModule } from './rooms/rooms.module';
 import { RoomUserModule } from './room-user/room-user.module';
+import { ExportModule } from './export/export.module';
 
 
 
@@ -30,6 +31,7 @@ import { RoomUserModule } from './room-user/room-user.module';
     AuthModule,
     RoomsModule,
     RoomUserModule,
+    ExportModule,
   ],
   controllers: [AppController],
   providers: [AppService],

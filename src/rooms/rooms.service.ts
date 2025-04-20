@@ -10,7 +10,7 @@ import { UserActiveInterface } from 'src/common/interfaces/user-active.interface
 import * as fs from 'fs';
 import { writeFile, mkdir, access, constants } from 'fs/promises';
 import * as path from 'path';
-import { CanvasFileHelper } from './helpers/canva-file.helper';
+
 import { CanvasStorageService } from './canvas-storage.service';
 import { CanvasSyncHelper } from './helpers/canvas-sync.helper';
 @Injectable()

@@ -34,11 +34,6 @@ export class RoomsController {
     private readonly roomsService: RoomsService,
     private readonly roomUserService: RoomUserService,
   ) {}
-
-
-
-
-
   @Post()
   @Auth(Role.USER) // Aseguramos que solo usuarios autenticados puedan crear salas
   create(

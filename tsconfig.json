@@ -21,5 +21,5 @@
     "resolveJsonModule": true              // Permite importar archivos JSON
   },
   "include": ["src/**/*.ts"],               // Incluye todos los archivos TypeScript en la carpeta src
-  "exclude": ["node_modules", "dist"]       // Excluye node_modules y dist de la compilación
+  "exclude": ["src/export/templates/**/*","node_modules", "dist"]       // Excluye node_modules y dist de la compilación
 }
