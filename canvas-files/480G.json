@@ -1,15 +1,15 @@
 {
   "roomCode": "480G",
-  "lastUpdated": "2025-04-19T20:10:14.183Z",
+  "lastUpdated": "2025-04-20T03:21:24.762Z",
   "components": [
     {
-      "id": "ee1c3df2-83c4-4bf5-afc5-9222326f7437",
+      "id": "cf8e324a-590a-4097-a1b6-bf10ec02ce2c",
       "type": "div",
       "style": {
-        "top": "90px",
-        "left": "192px",
-        "width": "200px",
-        "height": "100px",
+        "top": "67px",
+        "left": "216px",
+        "width": "500px",
+        "height": "666px",
         "backgroundColor": "#f0f0f0",
         "color": "#000000",
         "border": "1px solid #cccccc",
@@ -18,8 +18,8 @@
         "fontSize": "16px",
         "fontFamily": "Arial, sans-serif",
         "fontWeight": "bold",
-        "textAlign": "left",
-        "lineHeight": "52px"
+        "textAlign": "center",
+        "lineHeight": "40px"
       },
       "content": "Nuevo Div",
       "children": [],
