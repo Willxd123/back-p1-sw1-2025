@@ -123,7 +123,7 @@ export class RoomUserService {
       relations: ['user'],
     });
   }
-   // Método para guardar el diagrama
+   /* // Método para guardar el diagrama
    async saveDiagram(roomId: number, userId: number, diagramData: string) {
     const roomUser = await this.roomUserRepository.findOne({ where: { room: { id: roomId }, user: { id: userId } } });
 
@@ -144,5 +144,5 @@ export class RoomUserService {
     }
 
     return roomUser.diagram_data; // Retornar el JSON o XML
-  }
+  } */
 }
