@@ -55,23 +55,44 @@ export class RoomsGateway implements OnGatewayConnection, OnGatewayDisconnect {
 
   // Crear una nueva sala con Socket.IO
   @SubscribeMessage('createRoom')
-  async handleCreateRoom(
-    @ConnectedSocket() client: Socket,
-    @MessageBody() createRoomDto: CreateRoomDto,
-  ) {
-    try {
-      const user = client.data.user;
-      if (!user) throw new Error('Usuario no autenticado');
+async handleCreateRoom(
+  @ConnectedSocket() client: Socket,
+  @MessageBody() createRoomDto: CreateRoomDto,
+) {
+  try {
+    const user = client.data.user;
+    if (!user) throw new Error('Usuario no autenticado');
 
-      const room = await this.roomsService.create(createRoomDto, user);
-      client.join(room.code); // Unirse a la sala
-      client.emit('roomCreated', room); // Enviar confirmación al cliente
+    const room = await this.roomsService.create(createRoomDto, user);
+    client.join(room.code);
 
-      console.log(`Sala creada: ${room.name}, código: ${room.code}`);
-    } catch (error) {
-      client.emit('error', { message: error.message });
-    }
+    const defaultPage = {
+      id: crypto.randomUUID(),
+      name: 'Página 1',
+      components: [],
+    };
+
+    // ⬇️ Paso 1: Actualizar estado en memoria
+    await this.canvasSync.updateRoomState(room.code, (pages) => {
+      pages.push(defaultPage);
+    });
+
+    // ✅ Paso 2: Guardar en BD el estado actualizado
+    const updatedPages = await this.canvasSync.getRoomState(room.code);
+    await this.canvasStorage.saveCanvas(room.code, updatedPages);
+
+    // Paso 3: Emitir al cliente
+    client.emit('roomCreated', room);
+    client.emit('pageAdded', defaultPage);
+
+    console.log(`🛠️ Sala creada: ${room.name}, con Página 1, código: ${room.code}`);
+  } catch (error) {
+    client.emit('error', { message: error.message });
   }
+}
+F
+
+
 
   // Unirse a una sala existente
   @SubscribeMessage('joinRoom')
@@ -101,10 +122,11 @@ export class RoomsGateway implements OnGatewayConnection, OnGatewayDisconnect {
       this.server.to(roomCode).emit('newUserJoined', { email: user.email });
       // Enviar el diagrama almacenado al cliente
       // Cargar el canvas existente y enviarlo al nuevo usuario
-      const components = await this.canvasStorage.loadCanvas(roomCode);
-      if (components.length > 0) {
-        client.emit('initialCanvasLoad', components);
+      const pages = await this.canvasSync.getRoomState(roomCode);
+      if (pages.length > 0) {
+        client.emit('initialCanvasLoad', pages);
       }
+
       // Obtener la lista de usuarios conectados y emitir a todos
       const usersInRoom =
         await this.getUsersInRoomWithConnectionStatus(roomCode);
@@ -194,29 +216,66 @@ export class RoomsGateway implements OnGatewayConnection, OnGatewayDisconnect {
     }
     return false;
   }
+
+  private findPageById(pages: any[], pageId: string) {
+    return pages.find(p => p.id === pageId);
+  }
+
+  private findComponentInPage(page: any, componentId: string): any | null {
+    const search = (components: any[]): any | null => {
+      for (const comp of components) {
+        if (comp.id === componentId) return comp;
+        if (comp.children) {
+          const found = search(comp.children);
+          if (found) return found;
+        }
+      }
+      return null;
+    };
+    return search(page.components || []);
+  }
+
+  private removeComponentFromPage(page: any, componentId: string): boolean {
+    const remove = (components: any[]): boolean => {
+      const index = components.findIndex(c => c.id === componentId);
+      if (index !== -1) {
+        components.splice(index, 1);
+        return true;
+      }
+      for (const comp of components) {
+        if (comp.children && remove(comp.children)) {
+          return true;
+        }
+      }
+      return false;
+    };
+    return remove(page.components || []);
+  }
+
   //agregar componentes
   @SubscribeMessage('addComponent')
-  async handleAddComponent( // Añade async aquí
+  async handleAddComponent(
     @ConnectedSocket() client: Socket,
-    @MessageBody() data: { roomCode: string; component: any },
+    @MessageBody() data: { roomCode: string, pageId: string, component: any }
   ) {
     try {
-      const { roomCode, component } = data;
+      const { roomCode, pageId, component } = data;
       const user = client.data.user;
 
-      // Broadcast the component to all clients in the room except the sender
-      client.to(roomCode).emit('componentAdded', component);
-
-      // Guardar el nuevo estado (usa await)
-      await this.canvasSync.updateRoomState(roomCode, (components) => {
-        components.push(component);
+      await this.canvasSync.updateRoomState(roomCode, (pages) => {
+        const page = pages.find(p => p.id === pageId);
+        if (page) {
+          page.components.push(component);
+        }
       });
 
-      console.log(`User ${user.email} added component in room: ${roomCode}`);
+      this.server.to(roomCode).emit('componentAdded', { pageId, component });
+      console.log(`🆕 Componente agregado por ${user.email} en página ${pageId}`);
     } catch (error) {
       client.emit('error', { message: error.message });
     }
   }
+
 
   //agrega hijo
   @SubscribeMessage('addChildComponent')
@@ -249,18 +308,21 @@ export class RoomsGateway implements OnGatewayConnection, OnGatewayDisconnect {
   @SubscribeMessage('removeComponent')
   async handleRemoveComponent(
     @ConnectedSocket() client: Socket,
-    @MessageBody() data: { roomCode: string; componentId: string },
+    @MessageBody() data: { roomCode: string, pageId: string, componentId: string }
   ) {
     try {
-      const { roomCode, componentId } = data;
+      const { roomCode, pageId, componentId } = data;
       const user = client.data.user;
 
-      await this.canvasSync.updateRoomState(roomCode, (components) => {
-        this.removeComponentFromArray(components, componentId);
-        client.to(roomCode).emit('componentRemoved', componentId);
+      await this.canvasSync.updateRoomState(roomCode, (pages) => {
+        const page = this.findPageById(pages, pageId);
+        if (page) {
+          this.removeComponentFromPage(page, componentId);
+        }
       });
 
-      console.log(`User ${user.email} removed component ${componentId} in room: ${roomCode}`);
+      client.to(roomCode).emit('componentRemoved', { pageId, componentId });
+      console.log(`🗑️ Componente eliminado por ${user.email} de página ${pageId}`);
     } catch (error) {
       client.emit('error', { message: error.message });
     }
@@ -271,26 +333,34 @@ export class RoomsGateway implements OnGatewayConnection, OnGatewayDisconnect {
   @SubscribeMessage('moveComponent')
   async handleMoveComponent(
     @ConnectedSocket() client: Socket,
-    @MessageBody() data: { roomCode: string; componentId: string; newPosition: { left: string, top: string } },
+    @MessageBody() data: { roomCode: string, pageId: string, componentId: string, newPosition: { left: string, top: string } }
   ) {
     try {
-      const { roomCode, componentId, newPosition } = data;
+      const { roomCode, pageId, componentId, newPosition } = data;
       const user = client.data.user;
 
-      await this.canvasSync.updateRoomState(roomCode, (components) => {
-        const component = this.findComponentInArray(components, componentId);
-        if (component) {
-          component.style.left = newPosition.left;
-          component.style.top = newPosition.top;
-          client.to(roomCode).emit('componentMoved', { componentId, newPosition });
+      // ACTUALIZAR el estado interno de la sala
+      await this.canvasSync.updateRoomState(roomCode, (pages) => {
+        const page = pages.find(p => p.id === pageId);
+        if (page) {
+          const component = this.findComponentInPage(page, componentId);
+          if (component) {
+            component.style.left = newPosition.left;
+            component.style.top = newPosition.top;
+          }
         }
       });
 
-      console.log(`User ${user.email} moved component ${componentId} in room: ${roomCode}`);
+      // EMITIR a los demás usuarios
+      client.to(roomCode).emit('componentMoved', { pageId, componentId, newPosition });
+
+      console.log(`↔️ Movimiento de componente ${componentId} en página ${pageId}`);
     } catch (error) {
       client.emit('error', { message: error.message });
     }
   }
+
+
 
   @SubscribeMessage('transformComponent')
   async handleTransformComponent(
@@ -342,17 +412,19 @@ export class RoomsGateway implements OnGatewayConnection, OnGatewayDisconnect {
   @SubscribeMessage('updateComponentProperties')
   async handleUpdateComponentProperties(
     @ConnectedSocket() client: Socket,
-    @MessageBody() data: { roomCode: string; componentId: string; updates: any },
+    @MessageBody() data: { roomCode: string; pageId: string; componentId: string; updates: any },
   ) {
     try {
-      const { roomCode, componentId, updates } = data;
-      
-      await this.canvasSync.updateRoomState(roomCode, (components) => {
-        const component = this.findComponentInArray(components, componentId);
+      const { roomCode, pageId, componentId, updates } = data;
+
+      await this.canvasSync.updateRoomState(roomCode, (pages) => {
+        const page = pages.find(p => p.id === pageId);
+        if (!page) return;
+
+        const component = this.findComponentInPage(page, componentId);
         if (component) {
           if (!component.style) component.style = {};
-          
-          // Aplica las actualizaciones
+
           Object.keys(updates).forEach(key => {
             if (key === 'content') {
               component.content = updates[key];
@@ -360,11 +432,12 @@ export class RoomsGateway implements OnGatewayConnection, OnGatewayDisconnect {
               component.style[key] = updates[key];
             }
           });
-  
-          // Emitir a TODOS los clientes (incluyendo el que originó el cambio)
+
+          // Emitir a todos
           this.server.to(roomCode).emit('componentPropertiesUpdated', {
+            pageId,
             componentId,
-            updates
+            updates,
           });
         }
       });
@@ -372,5 +445,70 @@ export class RoomsGateway implements OnGatewayConnection, OnGatewayDisconnect {
       client.emit('error', { message: error.message });
     }
   }
+
+  @SubscribeMessage('addPage')
+  async handleAddPage(
+    @ConnectedSocket() client: Socket,
+    @MessageBody() data: { roomCode: string, page: any }
+  ) {
+    try {
+      const { roomCode, page } = data;
+      const user = client.data.user;
+
+      await this.canvasSync.updateRoomState(roomCode, (pages) => {
+        pages.push(page); // ← Agregamos página al array de páginas
+      });
+
+      client.to(roomCode).emit('pageAdded', page);
+      console.log(`📄 Nueva página agregada por ${user.email}: ${page.name}`);
+    } catch (error) {
+      console.error('Error agregando página:', error);
+      client.emit('error', { message: error.message });
+    }
+  }
+  @SubscribeMessage('removePage')
+  async handleRemovePage(
+    @ConnectedSocket() client: Socket,
+    @MessageBody() data: { roomCode: string, pageId: string }
+  ) {
+    try {
+      const { roomCode, pageId } = data;
+      const user = client.data.user;
+
+      await this.canvasSync.updateRoomState(roomCode, (pages) => {
+        const index = pages.findIndex(p => p.id === pageId);
+        if (index !== -1) {
+          pages.splice(index, 1);
+        }
+      });
+
+      client.to(roomCode).emit('pageRemoved', pageId);
+      console.log(`🗑️ Página eliminada por ${user.email}: ${pageId}`);
+    } catch (error) {
+      console.error('Error eliminando página:', error);
+      client.emit('error', { message: error.message });
+    }
+  }
+  @SubscribeMessage('requestPage')
+  async handleRequestPage(
+    @ConnectedSocket() client: Socket,
+    @MessageBody() data: { roomCode: string, pageId: string }
+  ) {
+    try {
+      const { roomCode, pageId } = data;
+      const pages = await this.canvasSync.getRoomState(roomCode);
+      const page = pages.find(p => p.id === pageId);
+
+      if (page) {
+        client.emit('pageData', page); // ⬅️ Nuevo evento 'pageData' para enviar solo esa página
+      } else {
+        client.emit('pageData', null);
+      }
+    } catch (error) {
+      console.error('Error enviando página:', error);
+      client.emit('error', { message: error.message });
+    }
+  }
+
 
 }

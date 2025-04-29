@@ -1,4 +1,4 @@
-// src/rooms/helpers/canvas-sync.helper.ts
+
 import { Injectable } from '@nestjs/common';
 import { CanvasStorageService } from '../canvas-storage.service';
 
@@ -10,21 +10,21 @@ export class CanvasSyncHelper {
 
   async getRoomState(roomCode: string): Promise<any[]> {
     if (!this.roomStates.has(roomCode)) {
-      const components = await this.canvasStorage.loadCanvas(roomCode);
-      this.roomStates.set(roomCode, components);
+      const pages = await this.canvasStorage.loadCanvas(roomCode);
+      this.roomStates.set(roomCode, pages);
     }
     return this.roomStates.get(roomCode);
   }
 
   async updateRoomState(
-    roomCode: string, 
-    updater: (components: any[]) => void,
+    roomCode: string,
+    updater: (pages: any[]) => void,
     options: { broadcast?: boolean } = { broadcast: true }
   ) {
-    const components = await this.getRoomState(roomCode);
-    const clonedComponents = JSON.parse(JSON.stringify(components)); // Deep clone
-    updater(clonedComponents);
-    this.roomStates.set(roomCode, clonedComponents);
-    await this.canvasStorage.saveCanvas(roomCode, clonedComponents);
+    const pages = await this.getRoomState(roomCode);
+    const clonedPages = JSON.parse(JSON.stringify(pages)); // Deep clone
+    updater(clonedPages);
+    this.roomStates.set(roomCode, clonedPages);
+    await this.canvasStorage.saveCanvas(roomCode, clonedPages);
   }
 }
