@@ -192,7 +192,6 @@ export class RoomsGateway implements OnGatewayConnection, OnGatewayDisconnect {
         return true;
       }
     }
-
     return false;
   }
   //agregar componentes

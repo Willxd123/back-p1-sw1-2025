@@ -20,7 +20,7 @@ export class Room {
   @Column()
   name: string; // Nombre de la sala
   // src/rooms/entities/room.entity.ts
-  @Column({ nullable: true })
+  @Column({type: 'text', nullable: true })
   canvasFile: string;
 
   @ManyToOne(() => User, (user) => user.createdRooms, { nullable: false })

@@ -1,53 +1,42 @@
 // src/rooms/canvas-storage.service.ts
 import { Injectable } from '@nestjs/common';
-import * as fs from 'fs';
-import * as path from 'path';
-import { promisify } from 'util';
-
-const writeFileAsync = promisify(fs.writeFile);
-const readFileAsync = promisify(fs.readFile);
-const mkdirAsync = promisify(fs.mkdir);
-const accessAsync = promisify(fs.access);
+import { InjectRepository } from '@nestjs/typeorm';
+import { Room } from './entities/room.entity';
+import { Repository } from 'typeorm';
 
 @Injectable()
 export class CanvasStorageService {
-    //ubicacion del archivo
-  private readonly storagePath = path.join(process.cwd(), 'canvas-files');
-
-  constructor() {
-    this.ensureStorageDirectory();
-  }
-
-  private async ensureStorageDirectory() {
-    try {
-      await accessAsync(this.storagePath, fs.constants.F_OK);
-    } catch {
-      await mkdirAsync(this.storagePath, { recursive: true });
-    }
-  }
-//ubicacion del archivo
-  private getFilePath(roomCode: string): string {
-    return path.join(this.storagePath, `${roomCode}.json`);
-  }
+  constructor(
+    @InjectRepository(Room)
+    private readonly roomRepository: Repository<Room>,
+  ) {}
 
   async saveCanvas(roomCode: string, components: any[]) {
-    const filePath = this.getFilePath(roomCode);
+    const room = await this.roomRepository.findOneBy({ code: roomCode });
+    if (!room) throw new Error('Room not found');
+
     const data = {
       roomCode,
       lastUpdated: new Date().toISOString(),
-      components
+      components,
     };
-    await writeFileAsync(filePath, JSON.stringify(data, null, 2), 'utf8');
+
+    room.canvasFile = JSON.stringify(data);
+    await this.roomRepository.save(room);
   }
 
   async loadCanvas(roomCode: string): Promise<any[]> {
-    const filePath = this.getFilePath(roomCode);
+    const room = await this.roomRepository.findOneBy({ code: roomCode });
+    if (!room || !room.canvasFile) {
+      return [];
+    }
+
     try {
-      await accessAsync(filePath, fs.constants.F_OK);
-      const data = await readFileAsync(filePath, 'utf8');
-      return JSON.parse(data).components;
-    } catch {
-      return []; // Retorna array vacío si el archivo no existe
+      const parsed = JSON.parse(room.canvasFile);
+      return parsed.components || [];
+    } catch (error) {
+      console.error('Error parsing canvasFile:', error);
+      return [];
     }
   }
 }
