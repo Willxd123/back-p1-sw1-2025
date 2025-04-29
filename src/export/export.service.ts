@@ -1,4 +1,3 @@
-// src/export/export.service.ts
 import { Injectable } from '@nestjs/common';
 import * as fs from 'fs';
 import * as path from 'path';
@@ -20,90 +19,117 @@ export class ExportService {
   constructor(
     @InjectRepository(Room)
     private readonly roomRepository: Repository<Room>,
-  ) { }
+  ) {}
 
   async exportRoomAsAngular(roomCode: string): Promise<string> {
-    // 🚨 1. Cargar desde la base de datos
     const room = await this.roomRepository.findOneBy({ code: roomCode });
-    if (!room || !room.canvasFile) throw new Error(`No existe canvas para la sala: ${roomCode}`);
+    if (!room || !room.canvasFile) {
+      throw new Error(`No existe canvas para la sala: ${roomCode}`);
+    }
 
-    const { components } = JSON.parse(room.canvasFile);
+    // 🚨 Parsear JSON correctamente
+    const parsed = JSON.parse(room.canvasFile);
+    let pages: any[] = [];
 
-    // 🚀 2. Copiar plantilla base a temporal
+    if (Array.isArray(parsed)) {
+      // Soporte para JSON viejo (sin estructura de páginas)
+      pages = [{ id: 'default', name: 'Página 1', components: parsed }];
+    } else if (parsed.pages && Array.isArray(parsed.pages)) {
+      // JSON moderno con estructura de páginas
+      pages = parsed.pages;
+    } else if (parsed.components && Array.isArray(parsed.components)) {
+      // Soporte para objetos con propiedad components directa
+      pages = [{ id: 'default', name: 'Página 1', components: parsed.components }];
+    } else {
+      throw new Error('El canvasFile no contiene un formato válido de páginas.');
+    }
+
+    // Validar que cada página tenga componentes
+    pages = pages.filter(page => Array.isArray(page.components));
+
     const roomExportPath = path.join(this.exportTmpPath, `angular-${roomCode}`);
     fs.rmSync(roomExportPath, { recursive: true, force: true });
     fs.cpSync(this.templatePath, roomExportPath, { recursive: true });
 
-    // 🚀 3. Generar archivos del componente
-    const htmlOutput = this.convertJsonToHtml(components);
-    const pagesDir = path.join(roomExportPath, 'src', 'app', 'pages', `pages-${roomCode}`);
+    const pagesDir = path.join(roomExportPath, 'src', 'app', 'pages');
     await mkdirAsync(pagesDir, { recursive: true });
 
-    const htmlPath = path.join(pagesDir, `pages-${roomCode}.component.html`);
-    const tsPath = path.join(pagesDir, `pages-${roomCode}.component.ts`);
+    let imports = '';
+    let routes = '';
 
-    await writeFileAsync(htmlPath, htmlOutput);
-    await writeFileAsync(tsPath, this.generateComponentTs(roomCode));
+    for (const page of pages) {
+      const pageFolder = path.join(pagesDir, `page-${page.id}`);
+      await mkdirAsync(pageFolder, { recursive: true });
 
-    // 🚀 4. Actualizar app.routes.ts
+      const htmlPath = path.join(pageFolder, `page-${page.id}.component.html`);
+      const tsPath = path.join(pageFolder, `page-${page.id}.component.ts`);
+
+      const htmlContent = this.convertComponentsToHtml(page.components);
+      await writeFileAsync(htmlPath, htmlContent);
+      await writeFileAsync(tsPath, this.generateComponentTs(page.id));
+
+      const normalizedId = this.normalizeId(page.id);
+      imports += `import { Page${normalizedId}Component } from './pages/page-${page.id}/page-${page.id}.component';\n`;
+      routes += `  { path: '${page.name.toLowerCase().replace(/\s+/g, '-')}', component: Page${normalizedId}Component },\n`;
+    }
+
+    // Actualizar rutas
     const routesPath = path.join(roomExportPath, 'src', 'app', 'app.routes.ts');
     let routesContent = await readFileAsync(routesPath, 'utf8');
-    const importLine = `import { Pages${roomCode}Component } from './pages/pages-${roomCode}/pages-${roomCode}.component';`;
 
-    if (!routesContent.includes(importLine)) {
-      routesContent = importLine + '\n' + routesContent;
+    if (!routesContent.includes(imports)) {
+      routesContent = imports + '\n' + routesContent;
       routesContent = routesContent.replace(
         'export const routes: Routes = [',
-        `export const routes: Routes = [\n  { path: '', component: Pages${roomCode}Component },`
+        `export const routes: Routes = [\n${routes}`
       );
       await writeFileAsync(routesPath, routesContent);
     }
 
-    // 🚀 5. Comprimir a zip
     const zipPath = path.join(this.exportTmpPath, `angular-${roomCode}.zip`);
     await this.zipDirectory(roomExportPath, zipPath);
 
     return zipPath;
   }
 
-  private convertJsonToHtml(components: any[]): string {
+  private convertComponentsToHtml(components: any[]): string {
     const render = (comp: any): string => {
       const tag = comp.type || 'div';
       const styleEntries = Object.entries(comp.style || {}).map(([k, v]) => {
         const kebabKey = k.replace(/([A-Z])/g, '-$1').toLowerCase();
         return `${kebabKey}: ${v}`;
       });
-      const style = styleEntries.join(';');
+      const style = styleEntries.join('; ');
       const content = comp.content || '';
       const children = (comp.children || []).map(render).join('');
       return `<${tag} style="${style}">${content}${children}</${tag}>`;
     };
-    return `<body>\n${components.map(render).join('\n')}\n</body>`;
+
+    return `<div style="position: relative; width: 100%; height: 100vh;">\n${components.map(render).join('\n')}\n</div>`;
   }
 
-  private generateComponentTs(roomCode: string): string {
+  private generateComponentTs(pageId: string): string {
     return `import { Component } from '@angular/core';
 
 @Component({
-  selector: 'app-pages-${roomCode}',
-  templateUrl: './pages-${roomCode}.component.html',
+  selector: 'app-page-${pageId}',
+  templateUrl: './page-${pageId}.component.html',
   styleUrls: []
 })
-export class Pages${roomCode}Component {}
+export class Page${this.normalizeId(pageId)}Component {}
 `;
+  }
+
+  private normalizeId(id: string): string {
+    return id.replace(/-/g, '');
   }
 
   private async zipDirectory(source: string, out: string): Promise<void> {
     const archive = archiver('zip', { zlib: { level: 9 } });
     const stream = fs.createWriteStream(out);
-    const folderName = path.basename(source);
 
     return new Promise((resolve, reject) => {
-      archive
-        .directory(source, folderName)
-        .on('error', err => reject(err))
-        .pipe(stream);
-
+      archive.directory(source, false).on('error', err => reject(err)).pipe(stream);
       stream.on('close', () => resolve());
       archive.finalize();
     });
