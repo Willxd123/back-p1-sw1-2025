@@ -55,42 +55,42 @@ export class RoomsGateway implements OnGatewayConnection, OnGatewayDisconnect {
 
   // Crear una nueva sala con Socket.IO
   @SubscribeMessage('createRoom')
-async handleCreateRoom(
-  @ConnectedSocket() client: Socket,
-  @MessageBody() createRoomDto: CreateRoomDto,
-) {
-  try {
-    const user = client.data.user;
-    if (!user) throw new Error('Usuario no autenticado');
+  async handleCreateRoom(
+    @ConnectedSocket() client: Socket,
+    @MessageBody() createRoomDto: CreateRoomDto,
+  ) {
+    try {
+      const user = client.data.user;
+      if (!user) throw new Error('Usuario no autenticado');
 
-    const room = await this.roomsService.create(createRoomDto, user);
-    client.join(room.code);
+      const room = await this.roomsService.create(createRoomDto, user);
+      client.join(room.code);
 
-    const defaultPage = {
-      id: crypto.randomUUID(),
-      name: 'Página 1',
-      components: [],
-    };
+      const defaultPage = {
+        id: crypto.randomUUID(),
+        name: 'Página 1',
+        components: [],
+      };
 
-    // ⬇️ Paso 1: Actualizar estado en memoria
-    await this.canvasSync.updateRoomState(room.code, (pages) => {
-      pages.push(defaultPage);
-    });
+      // ⬇️ Paso 1: Actualizar estado en memoria
+      await this.canvasSync.updateRoomState(room.code, (pages) => {
+        pages.push(defaultPage);
+      });
 
-    // ✅ Paso 2: Guardar en BD el estado actualizado
-    const updatedPages = await this.canvasSync.getRoomState(room.code);
-    await this.canvasStorage.saveCanvas(room.code, updatedPages);
+      // ✅ Paso 2: Guardar en BD el estado actualizado
+      const updatedPages = await this.canvasSync.getRoomState(room.code);
+      await this.canvasStorage.saveCanvas(room.code, updatedPages);
 
-    // Paso 3: Emitir al cliente
-    client.emit('roomCreated', room);
-    client.emit('pageAdded', defaultPage);
+      // Paso 3: Emitir al cliente
+      client.emit('roomCreated', room);
+      client.emit('pageAdded', defaultPage);
 
-    console.log(`🛠️ Sala creada: ${room.name}, con Página 1, código: ${room.code}`);
-  } catch (error) {
-    client.emit('error', { message: error.message });
+      console.log(`🛠️ Sala creada: ${room.name}, con Página 1, código: ${room.code}`);
+    } catch (error) {
+      client.emit('error', { message: error.message });
+    }
   }
-}
-F
+  F
 
 
 
@@ -279,30 +279,42 @@ F
 
   //agrega hijo
   @SubscribeMessage('addChildComponent')
-  async handleAddChildComponent(
-    @ConnectedSocket() client: Socket,
-    @MessageBody() data: { roomCode: string; parentId: string; childComponent: any },
-  ) {
-    try {
-      const { roomCode, parentId, childComponent } = data;
-      const user = client.data.user;
-
-      await this.canvasSync.updateRoomState(roomCode, (components) => {
-        const parent = this.findComponentInArray(components, parentId);
-        if (parent) {
-          if (!parent.children) parent.children = [];
-          parent.children.push(childComponent);
-        }
-      });
-
-      // Broadcast the new child
-      client.to(roomCode).emit('childComponentAdded', { parentId, childComponent });
-
-      console.log(`User ${user.email} added child component to ${parentId} in room: ${roomCode}`);
-    } catch (error) {
-      client.emit('error', { message: error.message });
-    }
+async handleAddChildComponent(
+  @ConnectedSocket() client: Socket,
+  @MessageBody()
+  data: {
+    roomCode: string;
+    pageId: string;
+    parentId: string;
+    childComponent: any;
   }
+) {
+  try {
+    const { roomCode, pageId, parentId, childComponent } = data;
+    const user = client.data.user;
+
+    await this.canvasSync.updateRoomState(roomCode, (pages) => {
+      const page = pages.find(p => p.id === pageId);
+      if (!page) return;
+
+      const parent = this.findComponentInPage(page, parentId);
+      if (parent) {
+        if (!parent.children) parent.children = [];
+        parent.children.push(childComponent);
+      }
+    });
+
+    this.server.to(roomCode).emit('childComponentAdded', {
+      parentId,
+      childComponent
+    });
+
+    console.log(`🧩 Hijo añadido por ${user.email} al componente ${parentId} en página ${pageId}`);
+  } catch (error) {
+    client.emit('error', { message: error.message });
+  }
+}
+
 
   //remover
   @SubscribeMessage('removeComponent')
@@ -439,6 +451,11 @@ F
             componentId,
             updates,
           });
+          client.emit('componentPropertiesUpdated', {
+            pageId,
+            componentId,
+            updates,
+          });
         }
       });
     } catch (error) {
@@ -506,6 +523,38 @@ F
       }
     } catch (error) {
       console.error('Error enviando página:', error);
+      client.emit('error', { message: error.message });
+    }
+  }
+  //tabla
+  @SubscribeMessage('updateTableStructure')
+  async handleUpdateTableStructure(
+    @ConnectedSocket() client: Socket,
+    @MessageBody()
+    data: {
+      roomCode: string;
+      pageId: string;
+      tableId: string;
+      children: any[]; // nuevas filas (tr) con sus celdas (td)
+    }
+  ) {
+    try {
+      const { roomCode, pageId, tableId, children } = data;
+      const user = client.data.user;
+
+      await this.canvasSync.updateRoomState(roomCode, (pages) => {
+        const page = pages.find(p => p.id === pageId);
+        if (!page) return;
+
+        const table = this.findComponentInPage(page, tableId);
+        if (table && table.type === 'table') {
+          table.children = children;
+        }
+      });
+
+      this.server.to(roomCode).emit('tableStructureUpdated', { pageId, tableId, children });
+      console.log(`📐 Tabla actualizada por ${user.email}`);
+    } catch (error) {
       client.emit('error', { message: error.message });
     }
   }
